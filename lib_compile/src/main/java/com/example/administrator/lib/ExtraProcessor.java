@@ -3,6 +3,7 @@ package com.example.administrator.lib;
 import com.example.administrator.lib.Util.BundleGetBuilder;
 import com.example.administrator.lib.Util.BundleSaveBuilder;
 import com.example.administrator.lib.Util.Consts;
+import com.example.administrator.lib.Util.IntentGetBuilder;
 import com.example.administrator.lib.Util.Utils;
 import com.example.admistrator.Extra;
 import com.google.auto.service.AutoService;
@@ -54,6 +55,7 @@ public class ExtraProcessor extends AbstractProcessor {
 
     BundleGetBuilder mBundleGetBuilder ;
     BundleSaveBuilder mBundleSaveBuilder ;
+    IntentGetBuilder mIntentGetBuilder ;
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnvironment) {
@@ -64,6 +66,7 @@ public class ExtraProcessor extends AbstractProcessor {
         log = processingEnvironment.getMessager() ;
         mBundleGetBuilder = new BundleGetBuilder(elementsUtil,typeUtil,log) ;
         mBundleSaveBuilder = new BundleSaveBuilder(elementsUtil,typeUtil,log) ;
+        mIntentGetBuilder = new IntentGetBuilder(elementsUtil,typeUtil,log) ;
         log.printMessage(Diagnostic.Kind.NOTE,"__init");
     }
 
@@ -92,6 +95,7 @@ public class ExtraProcessor extends AbstractProcessor {
         }
         TypeMirror typeActivity = elementsUtil.getTypeElement("android.app.Activity").asType() ;
         TypeMirror typeFragment = elementsUtil.getTypeElement("android.app.Fragment").asType() ;
+        TypeMirror typeV4Fragment = elementsUtil.getTypeElement("android.support.v4.app.Fragment").asType() ;
 
 
         TypeElement typeExtra = elementsUtil.getTypeElement("com.example.lib_core.IExtra") ;
@@ -118,8 +122,8 @@ public class ExtraProcessor extends AbstractProcessor {
 
                 if(typeUtil.isSubtype(typeElement.asType(),typeActivity)){
                     //构建activity的获取extra代码
-                    makeActivityMethod(typeElement, elements, loadExtra);
-                } else if(typeUtil.isSubtype(typeElement.asType(),typeFragment)) {
+                    makeActivityMethod(elements, loadExtra);
+                } else if(typeUtil.isSubtype(typeElement.asType(),typeFragment) || typeUtil.isSubtype(typeElement.asType(),typeV4Fragment)) {
                     //构建fragment的获取extra代码
                     loadExtra.addStatement("bundle = bundle == null ? t.getArguments() : bundle") ;
                     for (Element element : elements){
@@ -154,11 +158,11 @@ public class ExtraProcessor extends AbstractProcessor {
         return true ;
     }
 
-    private void makeActivityMethod(TypeElement typeElement, List<Element> elements, MethodSpec.Builder loadExtra) {
+    private void makeActivityMethod( List<Element> elements, MethodSpec.Builder loadExtra) {
 
         loadExtra.beginControlFlow("if(bundle == null)") ;
         for (Element element : elements){
-            buildGetTransfDataStatement(element,loadExtra);
+            mIntentGetBuilder.buildGetTransfDataStatement(element,loadExtra);
         }
         loadExtra.nextControlFlow("else") ;
         for (Element element : elements){
@@ -184,175 +188,6 @@ public class ExtraProcessor extends AbstractProcessor {
         }
     }
 
-    public void buildGetTransfDataStatement(Element element,MethodSpec.Builder builder) {
-        TypeMirror typeMirror = element.asType();
-        int type = typeMirror.getKind().ordinal();
-        //属性名 String text 获得text
-        String fieldName = element.getSimpleName().toString();
-
-        //获得注解 name值
-        String extraName = element.getAnnotation(Extra.class).name();
-        log.printMessage(Diagnostic.Kind.NOTE,"filed:" + fieldName +" extraName:" + extraName);
-        extraName = Utils.isEmpty(extraName) ? fieldName : extraName;
-        String defaultValue = "t." + fieldName;
-        String statement = defaultValue + " = t.getIntent().";
-        if (type == TypeKind.BOOLEAN.ordinal()) {
-            statement += "getBooleanExtra($S, " + defaultValue + ")";
-        } else if (type == TypeKind.BYTE.ordinal()) {
-            statement += "getByteExtra($S, " + defaultValue + ")";
-        } else if (type == TypeKind.SHORT.ordinal()) {
-            statement += "getShortExtra($S, " + defaultValue + ")";
-        } else if (type == TypeKind.INT.ordinal()) {
-            statement += "getIntExtra($S, " + defaultValue + ")";
-        } else if (type == TypeKind.LONG.ordinal()) {
-            statement += "getLongExtra($S, " + defaultValue + ")";
-        } else if (type == TypeKind.CHAR.ordinal()) {
-            statement += "getCharExtra($S, " + defaultValue + ")";
-        } else if (type == TypeKind.FLOAT.ordinal()) {
-            statement += "getFloatExtra($S, " + defaultValue + ")";
-        } else if (type == TypeKind.DOUBLE.ordinal()) {
-            statement += "getDoubleExtra($S, " + defaultValue + ")";
-        } else {
-            //数组类型
-            if (type == TypeKind.ARRAY.ordinal()) {
-                addArrayStatement(statement, fieldName, extraName, typeMirror, element,builder);
-            } else {
-                //Object
-                addObjectStatement(statement, fieldName, extraName, typeMirror, element,builder);
-            }
-            return;
-        }
-        log.printMessage(Diagnostic.Kind.NOTE,"extraName: " + extraName);
-        builder.addStatement(statement, extraName);
-    }
-
-    /**
-     * 添加数组
-     *
-     * @param statement
-     * @param fieldName
-     * @param typeMirror
-     * @param element
-     */
-    private void addArrayStatement(String statement, String fieldName, String extraName, TypeMirror
-            typeMirror, Element element, MethodSpec.Builder builder) {
-        TypeMirror parcelableType = elementsUtil.getTypeElement(Consts.PARCELABLE).asType() ;
-        //数组
-        switch (typeMirror.toString()) {
-            case Consts.BOOLEANARRAY:
-                statement += "getBooleanArrayExtra($S)";
-                break;
-            case Consts.INTARRAY:
-                statement += "getIntArrayExtra($S)";
-                break;
-            case Consts.SHORTARRAY:
-                statement += "getShortArrayExtra($S)";
-                break;
-            case Consts.FLOATARRAY:
-                statement += "getFloatArrayExtra($S)";
-                break;
-            case Consts.DOUBLEARRAY:
-                statement += "getDoubleArrayExtra($S)";
-                break;
-            case Consts.BYTEARRAY:
-                statement += "getByteArrayExtra($S)";
-                break;
-            case Consts.CHARARRAY:
-                statement += "getCharArrayExtra($S)";
-                break;
-            case Consts.LONGARRAY:
-                statement += "getLongArrayExtra($S)";
-                break;
-            case Consts.STRINGARRAY:
-                statement += "getStringArrayExtra($S)";
-                break;
-            default:
-                //Parcelable 数组
-                String defaultValue = "t." + fieldName;
-                //object数组 componentType获得object类型
-                ArrayTypeName arrayTypeName = (ArrayTypeName) ClassName.get(typeMirror);
-                TypeElement typeElement = elementsUtil.getTypeElement(arrayTypeName
-                        .componentType.toString());
-                //是否为 Parcelable 类型
-                if (!typeUtil.isSubtype(typeElement.asType(), parcelableType)) {
-                    throw new RuntimeException("不支持参数类型 " + typeMirror + " " +element);
-                }
-                statement = "$T[] " + fieldName + " = t.getIntent()" +
-                        ".getParcelableArrayExtra" +
-                        "($S)";
-                builder.addStatement(statement, parcelableType, extraName);
-                builder.beginControlFlow("if( null != $L)", fieldName);
-                statement = defaultValue + " = new $T[" + fieldName + ".length]";
-                builder.addStatement(statement, arrayTypeName.componentType)
-                        .beginControlFlow("for (int i = 0; i < " + fieldName + "" +
-                                ".length; " +
-                                "i++)")
-                        .addStatement(defaultValue + "[i] = ($T)" + fieldName + "[i]",
-                                arrayTypeName.componentType)
-                        .endControlFlow();
-                builder.endControlFlow();
-                return;
-        }
-        builder.addStatement(statement, extraName);
-    }
-
-
-    /**
-     * 添加对象 String/List/Parcelable
-     *
-     * @param statement
-     * @param extraName
-     * @param typeMirror
-     * @param element
-     */
-    private void addObjectStatement(String statement, String fieldName, String extraName,
-                                    TypeMirror typeMirror,
-                                    Element element,MethodSpec.Builder builder) {
-        //Parcelable
-        TypeMirror parcelableType = elementsUtil.getTypeElement(Consts.PARCELABLE).asType() ;
-        if (typeUtil.isSubtype(typeMirror, parcelableType)) {
-            statement += "getParcelableExtra($S)";
-        } else if (typeMirror.toString().equals(Consts.STRING)) {
-            statement += "getStringExtra($S)";
-        } else {
-            //List
-            TypeName typeName = ClassName.get(typeMirror);
-            //泛型
-            if (typeName instanceof ParameterizedTypeName) {
-                //list 或 arraylist
-                ClassName rawType = ((ParameterizedTypeName) typeName).rawType;
-                //泛型类型
-                List<TypeName> typeArguments = ((ParameterizedTypeName) typeName)
-                        .typeArguments;
-                if (!rawType.toString().equals(Consts.ARRAYLIST) && !rawType.toString()
-                        .equals(Consts.LIST)) {
-                    throw new RuntimeException("Not Support Inject Type:" + typeMirror + " " +
-                            element);
-                }
-                if (typeArguments.isEmpty() || typeArguments.size() != 1) {
-                    throw new RuntimeException("List Must Specify Generic Type:" + typeArguments);
-                }
-                TypeName typeArgumentName = typeArguments.get(0);
-                TypeElement typeElement = elementsUtil.getTypeElement(typeArgumentName
-                        .toString());
-                // Parcelable 类型
-                if (typeUtil.isSubtype(typeElement.asType(), parcelableType)) {
-                    statement += "getParcelableArrayListExtra($S)";
-                } else if (typeElement.asType().toString().equals(Consts.STRING)) {
-                    statement += "getStringArrayListExtra($S)";
-                } else if (typeElement.asType().toString().equals(Consts.INTEGER)) {
-                    statement += "getIntegerArrayListExtra($S)";
-                } else {
-                    throw new RuntimeException("Not Support Generic Type : " + typeMirror + " " +
-                            element);
-                }
-            } else {
-                throw new RuntimeException("Not Support Extra Type : " + typeMirror + " " +
-                        element);
-            }
-        }
-        builder.addStatement(statement, extraName);
-    }
 
 
 }

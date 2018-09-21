@@ -1,5 +1,6 @@
 package com.example.module_test;
 
+import android.app.Fragment;
 import android.os.Parcel;
 import android.os.Parcelable;
 
@@ -54,4 +55,17 @@ public class HouseInfo implements Parcelable {
             return new HouseInfo[size];
         }
     };
+
+    /**
+     * Author:janecer
+     * created on 2018/9/21
+     */
+    public static class TestFragment extends Fragment {
+
+        @Extra(name = "str")
+        public String string ;
+
+        @Extra(name = "doul")
+        public Double aDouble ;
+    }
 }
